@@ -14,8 +14,8 @@ const MongoClient = require('mongodb').MongoClient;
 const strataUrl = 'mongodb://127.0.0.1/strata';
 const governmentUrl = 'mongodb://127.0.0.1/government';
 
-const Bylaw = require('./strata');
-const TaxData = require('./taxes');
+const Bylaw = require('./strata_old');
+const TaxData = require('./taxes_old');
 
 // const strataDb = pmongo('mongodb://127.0.0.1/strata');
 // const authorsCollection = strataDb.collection('authors');

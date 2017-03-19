@@ -18,7 +18,8 @@ export default (req, res) => {
 					<!doctype html>
 					<html>
 						<header>
-							<title>My Universal App</title>
+							<title>Open Data Tools</title>
+							<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.2/semantic.min.css"></link>
 						</header>
 						<body>
 							<div id='app'></div>
@@ -31,7 +32,8 @@ export default (req, res) => {
 					<!doctype html>
 					<html>
 						<header>
-							<title>My Universal App</title>
+							<title>Open Data Tools</title>
+							<link rel="stylesheet" href="//cdnjs.cloudflare.com/ajax/libs/semantic-ui/2.2.2/semantic.min.css"></link>
 							<link rel='stylesheet' href='bundle.css'>
 						</header>
 						<body>

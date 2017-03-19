@@ -4,7 +4,7 @@ import webpack from 'webpack';
 import middleware from './src/middleware';
 import bodyParser from 'body-parser';
 import { graphqlExpress, graphiqlExpress } from 'graphql-server-express';
-import Schema from './server/schema.js';
+import Schema from './server/index';
 
 const app = express();
 

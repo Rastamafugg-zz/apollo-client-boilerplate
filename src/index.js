@@ -1,11 +1,13 @@
 import React from 'react';
 import { render } from 'react-dom';
-import { createStore } from 'redux';
+import { createStore, applyMiddleware, compose } from 'redux';
 import { Provider } from 'react-redux';
 import { Router, browserHistory } from 'react-router';
 import { syncHistoryWithStore } from 'react-router-redux';
 import ApolloClient, { createNetworkInterface } from 'apollo-client'
 import { ApolloProvider } from 'react-apollo'
+import createSagaMiddleware from 'redux-saga'
+import bcLawsSaga from './sagas'
 import { combineReducers } from 'redux';
 import { routerReducer } from 'react-router-redux';
 import todos from './reducers/todos';
@@ -18,8 +20,13 @@ const rootReducer = combineReducers({
   apollo: client.reducer()
 });
 
-const store = createStore(rootReducer, window.__REDUX_DEVTOOLS_EXTENSION__ && window.__REDUX_DEVTOOLS_EXTENSION__());
+const composeEnhancers = window.__REDUX_DEVTOOLS_EXTENSION_COMPOSE__ || compose;
+const sagaMiddleware = createSagaMiddleware();
+const store = createStore(rootReducer, composeEnhancers(
+		applyMiddleware(sagaMiddleware)
+));
 const history = syncHistoryWithStore(browserHistory, store);
+sagaMiddleware.run(bcLawsSaga);
 
 render(
 	<ApolloProvider store={store} client={client}>
