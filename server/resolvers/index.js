@@ -54,28 +54,55 @@ export default {
       });
     },
     lawsDocumentList(obj, args, context, info) {
-      const {contentType, sectionType} = args;
-      let url = (sectionType)
-          ? `http://www.bclaws.ca/civix/content/complete/${contentType}/${sectionType}`
-          : `http://www.bclaws.ca/civix/content/complete/${contentType}`;
+      const {path} = args;
+      let url = "http://www.bclaws.ca/civix/content/complete/";
+      if (path && Array.isArray(path)) {
+        for (let pathItem of path) {
+          url += pathItem + "/";
+        }
+      } else if (path) {
+        console.error(`Given path parameter is not an array: ${path}`);
+      }
       return new Promise((resolve, reject) => {
         axios.get(url).then(function(result) {
           //console.log(result.data);
           let parseString = xmlParser.parseString;
           parseString(result.data, function (err, resultJson) {
             let content = [];
-            for (let document of resultJson.root.dir) {
-              content.push({
-                title: document.CIVIX_DOCUMENT_TITLE,
-                documentId: document.CIVIX_DOCUMENT_ID,
-                documentType: document.CIVIX_DOCUMENT_TYPE,
-                documentParent: document.CIVIX_DOCUMENT_PARENT,
-                documentAncestors: [document.CIVIX_DOCUMENT_ANCESTORS],
-                documentVisible: document.CIVIX_DOCUMENT_VISIBLE,
-                documentOrder: parseInt(document.CIVIX_DOCUMENT_ORDER)
-              })
+            if (resultJson.root.index && Array.isArray(resultJson.root.index)) {
+              for (let document of resultJson.root.index) {
+                content.push({
+                  title: document.CIVIX_DOCUMENT_TITLE,
+                  id: document.CIVIX_DOCUMENT_ID
+                })
+              }
+            } else if (resultJson.root.dir && Array.isArray(resultJson.root.dir)) {
+              for (let document of resultJson.root.dir) {
+                content.push({
+                  title: document.CIVIX_DOCUMENT_TITLE,
+                  id: document.CIVIX_DOCUMENT_ID,
+                  type: document.CIVIX_DOCUMENT_TYPE,
+                  parent: document.CIVIX_DOCUMENT_PARENT,
+                  ancestors: document.CIVIX_DOCUMENT_ANCESTORS.toString().split(','),
+                  isVisible: document.CIVIX_DOCUMENT_VISIBLE,
+                  order: parseInt(document.CIVIX_DOCUMENT_ORDER)
+                })
+              }
+            } else if (resultJson.root.document && Array.isArray(resultJson.root.document)) {
+              for (let document of resultJson.root.document) {
+                content.push({
+                  title: document.CIVIX_DOCUMENT_TITLE,
+                  location: document.CIVIX_DOCUMENT_LOC,
+                  id: document.CIVIX_DOCUMENT_ID,
+                  type: document.CIVIX_DOCUMENT_TYPE,
+                  parent: document.CIVIX_DOCUMENT_PARENT,
+                  ancestors: document.CIVIX_DOCUMENT_ANCESTORS.toString().split(','),
+                  isVisible: document.CIVIX_DOCUMENT_VISIBLE,
+                  order: parseInt(document.CIVIX_DOCUMENT_ORDER)
+                })
+              }
             }
-            content.sort((a, b) => a.documentOrder - b.documentOrder);
+            content.sort((a, b) => a.order - b.order);
             console.log(resultJson);
             console.log(content);
             resolve(content);
@@ -83,15 +110,142 @@ export default {
         }).catch(function(error) {
           console.log(error)
         });
+      });
+    },
+    lawsDocument(obj, args, context, info) {
+      const {path} = args;
+      let tocUrl = "http://www.bclaws.ca/civix/content/complete/";
+      if (path && Array.isArray(path)) {
+        for (let pathItem of path) {
+          tocUrl += pathItem + "/";
+        }
+      } else if (path) {
+        console.error(`Given path parameter is not an array: ${path}`);
+      }
+      return new Promise((resolve, reject) => {
+        axios.get(tocUrl).then(function(result) {
+          //console.log(result.data);
+          let parseString = xmlParser.parseString;
+          parseString(result.data, function (err, resultJson) {
+            let content = [];
+            if (resultJson.root.document && Array.isArray(resultJson.root.document)) {
+              for (let document of resultJson.root.document) {
+                content.push({
+                  title: document.CIVIX_DOCUMENT_TITLE,
+                  location: document.CIVIX_DOCUMENT_LOC,
+                  id: document.CIVIX_DOCUMENT_ID,
+                  type: document.CIVIX_DOCUMENT_TYPE,
+                  parent: document.CIVIX_DOCUMENT_PARENT,
+                  ancestors: document.CIVIX_DOCUMENT_ANCESTORS.toString().split(','),
+                  isVisible: document.CIVIX_DOCUMENT_VISIBLE,
+                  order: parseInt(document.CIVIX_DOCUMENT_ORDER)
+                })
+              }
+            }
+            content.sort((a, b) => a.order - b.order);
+            let contentType = path[0];
+            let pageUrls = [];
+            for (let page of content) {
+              if (!page.id.toString().endsWith('_00') && !page.id.toString().endsWith('_00_multi')) {
+                pageUrls.push(axios.get(`http://www.bclaws.ca/civix/document/id/complete/${contentType}/${page.id}/xml`));
+              }
+            }
 
-        // axios.get('http://www.bclaws.ca/civix/document/id/complete/statreg/98043_00').then(function(result) {
-        //   console.log(result.data)
-        //   // var parseString = xmlParser.parseString;
-        //   // parseString(result.data, function (err, resultJson) {
-        //   //     console.log(resultJson);
-        //   // });}).catch(function(error) {
-        //   // console.log(error)
-        // })
+            let act = {
+              parts: []
+            };
+            axios.all(pageUrls).then(function(result) {
+              // console.log(result[0]);
+              result.map(val => {
+                parseString(val.data, function (err, resultJson) {
+
+                  let actDoc = resultJson['act:act'];
+                  let contentDoc = actDoc['act:content'][0];
+                  if (!act.id) {
+                    act.id = actDoc['$']['id'];
+                    act.title = actDoc['act:title'][0];
+                    act.chapter = actDoc['act:chapter'][0];
+                    act.yearEnacted = actDoc['act:yearenacted'][0];
+                    act.assentedTo = actDoc['act:assentedto'][0];
+                  }
+                  if (contentDoc['bcl:part']) {
+                    let partDoc = contentDoc['bcl:part'][0];
+                    let sectionsDoc = partDoc['bcl:section'];
+                    let part = {
+                      id: partDoc['$']['id'],
+                      postfix: contentDoc['$']['postfix'],
+                      num: partDoc['bcl:num'][0],
+                      text: partDoc['bcl:text'][0],
+                    };
+                    if (sectionsDoc) {
+                      part.sections = [];
+                      for (let sectionDoc of sectionsDoc) {
+                        let section = {
+                          id: sectionDoc['$']['id'],
+                          marginalNote: sectionDoc['bcl:marginalnote'][0],
+                          num: sectionDoc['bcl:num'][0],
+                        };
+                        let subsectionsDoc = sectionDoc['bcl:subsection'];
+                        if (subsectionsDoc) {
+                          section.subsections = [];
+                          for (let subsectionDoc of subsectionsDoc) {
+                            let subsection = {
+                              id: subsectionDoc['$']['id'],
+                              text: subsectionDoc['bcl:text'][0],
+                              num: subsectionDoc['bcl:num'][0],
+                            };
+                            section.subsections.push(subsection);
+                          }
+                          // console.log(sectionsDoc[0])
+                        }
+                        console.log(section)
+                        part.sections.push(section);
+                      }
+                      // console.log(sectionsDoc[0])
+                    }
+                    /*
+                     <act:content postfix="Part 1" id="98043_01">
+                     <bcl:part id="d2e25">
+                     <bcl:num>1</bcl:num>
+                     <bcl:text>Definitions and Interpretation</bcl:text>
+                     <bcl:section id="d2e34">
+                     <bcl:marginalnote>Definitions and interpretation</bcl:marginalnote>
+                     <bcl:num>1</bcl:num>
+                     <bcl:subsection id="d2e42">
+                     <bcl:num>1</bcl:num>
+                     <bcl:text>In this Act:</bcl:text>
+                     <bcl:definition id="d2e635">
+                     <bcl:text>
+                     <in:term>3/4 vote</in:term>
+                     means a vote in favour of a resolution by at least 3/4 of the votes cast by eligible voters who are present in person or by proxy at the time the vote is taken and who have not abstained from voting;
+                     </bcl:text>
+                     </bcl:definition>
+                     */
+                    act.parts.push(part);
+                  }
+                  if (contentDoc['bcl:schedule']) {
+                    let scheduleDoc = contentDoc['bcl:schedule'];
+                    console.log(scheduleDoc)
+                    // let partDoc = contentDoc['bcl:part'][0];
+                    // let sectionsDoc = partDoc['bcl:section'];
+                    // let part = {
+                    //   id: partDoc['$']['id'],
+                    //   postfix: contentDoc['$']['postfix'],
+                    //   num: partDoc['bcl:num'],
+                    //   text: partDoc['bcl:text'],
+                    // };
+                  }
+                });
+              });
+              console.log(act)
+              resolve(content);
+            });
+            // console.log(resultJson);
+            // console.log(content);
+          });
+        }).catch(function(error) {
+          console.log(error)
+        });
       });
     },
     taxes(obj, args, context, info) {

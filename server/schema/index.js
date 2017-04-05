@@ -3,21 +3,21 @@ export default `
     _id: String!
     property: String!
     document: String!
-    divisions: [Division]
+    divisions: [BylawDivision]
   }
 
-  type Division {
+  type BylawDivision {
     division: String!
     title: String
     text: String
-    sections: [Section]
+    sections: [BylawSection]
   }
 
-  type Section {
+  type BylawSection {
     section: String!
     title: String
     text: String
-    sections: [Section]
+    sections: [BylawSection]
   }
 
   type Content {
@@ -27,20 +27,69 @@ export default `
 
   type LawDocument {
     title: String!
-    documentId: String!
-    documentType: String!
-    documentParent: String!
-    documentAncestors: [String]!
-    documentVisible: Boolean!
-    documentOrder: Int!
+    id: String!
+    location: String
+    type: String
+    parent: String
+    ancestors: [String]
+    isVisible: Boolean
+    order: Int
   }
 
-  type Law {
-    _id: String!
-    property: String!
-    document: String!
-    divisions: [Division]
+  type Act {
+    title: String!
+    chapter: Int!
+    yearEnacted: Int!
+    assentedTo: String!
+    content: [Part!]
   }
+
+  union PartContent = Division | Section
+  
+  type Part {
+    id: String!
+    postfix: String!
+    num: Int!
+    text: String!
+    content: [PartContent]
+  }
+
+  type Division {
+    id: String!
+    num: Int!
+    text: String!
+    content: [Section]
+  }
+
+  type Section {
+    id: String!
+    num: Int!
+    marginalNote: String!
+    text: String
+    content: [Subsection]
+  }
+
+  type Subsection {
+    id: String!
+    num: Int!
+    text: String!
+    content: [Paragraph]
+  }
+
+  type Paragraph {
+    id: String!
+    num: String!
+    text: String!
+    content: [Subparagraph]
+  }
+
+  type Subparagraph {
+    id: String!
+    num: String!
+    text: String!
+  }
+  
+  
 
   # This represents a municipality's tax data for one year
   type TaxData {
@@ -166,7 +215,8 @@ export default `
   type Query {
     bylaws(property: String): [Bylaw]
     lawsContent: [Content]
-    lawsDocumentList(contentType: String, sectionType: String): [LawDocument]
+    lawsDocumentList(path: [String]): [LawDocument]
+    lawsDocument(path: [String]): [LawDocument]
     taxes(regionalDistrict: String, municipality: String, year: Int): [TaxData]
     propertyValues(collectionName: String, propertyName: String): [Property!]
   }
