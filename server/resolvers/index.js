@@ -50,5 +50,15 @@ export default {
         return 'Division';
       }
     }
+  },
+  SectionContent: {
+    __resolveType(obj, context, info){
+      return obj.type;
+    }
+  },
+  SubSectionContent: {
+    __resolveType(obj, context, info){
+      return obj.type;
+    }
   }
 }

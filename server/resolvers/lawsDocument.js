@@ -3,11 +3,19 @@ import xmlParser from 'xml2js';
 
 import { BCLAWS_URL, BCLAWS_DOC_URL } from '../config';
 
+function retrieveId(docNode) {
+  return (docNode['$']) ? docNode['$']['id'] : null;
+}
+
+function retrieveValue(docNode, field) {
+  return (docNode[field]) ? docNode[field][0] : null;
+}
+
 function parseDivision(divisionDoc) {
   let division = {
-    id: divisionDoc['$']['id'],
-    text: divisionDoc['bcl:text'][0],
-    num: divisionDoc['bcl:num'][0],
+    id: retrieveId(divisionDoc),
+    text: retrieveValue(divisionDoc, 'bcl:text'),
+    num: retrieveValue(divisionDoc, 'bcl:num'),
   };
   let sectionsDoc = divisionDoc['bcl:section'];
   if (sectionsDoc) {
@@ -18,28 +26,107 @@ function parseDivision(divisionDoc) {
   }
   return division;
 }
-
 function parseSection(sectionDoc) {
   let section = {
-    id: sectionDoc['$']['id'],
-    marginalNote: sectionDoc['bcl:marginalnote'][0],
-    num: sectionDoc['bcl:num'][0],
+    id: retrieveId(sectionDoc),
+    marginalNote: retrieveValue(sectionDoc, 'bcl:marginalnote'),
+    num: retrieveValue(sectionDoc, 'bcl:num'),
+    text: retrieveValue(sectionDoc, 'bcl:text'),
+    content: []
   };
   let subsectionsDoc = sectionDoc['bcl:subsection'];
   if (subsectionsDoc) {
-    section.subsections = [];
     for (let subsectionDoc of subsectionsDoc) {
-      let subsection = {
-        id: subsectionDoc['$']['id'],
-        text: subsectionDoc['bcl:text'][0],
-        num: subsectionDoc['bcl:num'][0],
-      };
-      section.subsections.push(subsection);
+      section.content.push(parseSubSection(subsectionDoc));
+    }
+    // console.log(sectionsDoc[0])
+  }
+  let paragraphsDoc = sectionDoc['bcl:paragraph'];
+  if (paragraphsDoc) {
+    for (let paragraphDoc of paragraphsDoc) {
+      section.content.push(parseParagraph(paragraphDoc));
     }
     // console.log(sectionsDoc[0])
   }
   // console.log(section);
   return section;
+}
+
+function parseSubSection(subSectionDoc) {
+  let subSection = {
+    id: retrieveId(subSectionDoc),
+    type: "SubSection",
+    text: retrieveValue(subSectionDoc, 'bcl:text'),
+    num: retrieveValue(subSectionDoc, 'bcl:num'),
+    content: []
+  };
+  let paragraphsDoc = subSectionDoc['bcl:paragraph'];
+  if (paragraphsDoc) {
+    for (let paragraphDoc of paragraphsDoc) {
+      subSection.content.push(parseParagraph(paragraphDoc));
+    }
+    // console.log(sectionsDoc[0])
+  }
+  let definitionsDoc = subSectionDoc['bcl:definition'];
+  if (definitionsDoc) {
+    for (let definitionDoc of definitionsDoc) {
+      subSection.content.push(parseDefinition(definitionDoc));
+    }
+    // console.log(sectionsDoc[0])
+  }
+  return subSection;
+}
+
+function parseParagraph(paragraphDoc) {
+  let paragraph = {
+    id: retrieveId(paragraphDoc),
+    type: "Paragraph",
+    text: retrieveValue(paragraphDoc, 'bcl:text'),
+    num: retrieveValue(paragraphDoc, 'bcl:num'),
+  };
+  return paragraph;
+}
+
+function parseDefinition(definitionDoc) {
+  let definition = {
+    id: retrieveId(definitionDoc),
+    type: "Definition",
+    text: "Placeholder",
+    links: []
+  };
+  let textDoc = retrieveValue(definitionDoc, 'bcl:text');
+  if (textDoc) {
+    console.log("TEXT: " + JSON.stringify(textDoc));
+    definition.term = retrieveValue(textDoc, 'in:term');
+    let textData = textDoc['$$'];
+    let linkData = textDoc['bcl:link'];
+    if (textData) {
+      if (textData.length === 1) {
+        definition.text = textData[0];
+      } else {
+        let text = [textData[0][0]];
+        if (linkData) {
+          for (let x=0; x<linkData.length; x++) {
+            let link = {
+              href: linkData[x]['$']['xlink:href'],
+              resourceType: linkData[x]['$']['resource'],
+              text: linkData[x]['in:doc'][0],
+            };
+            definition.links.push(link);
+            text.push('${' + link.href + '}')
+            text.push(textData[x])
+          }
+        }
+        definition.text = text.join('');
+      }
+    }
+  }
+  let paragraphsDoc = definitionDoc['bcl:paragraph'];
+  if (paragraphsDoc) {
+    // TODO: Add text content to definition text
+  }
+
+  return definition;
 }
 
 export default function(obj, args, context, info) {
@@ -57,7 +144,7 @@ export default function(obj, args, context, info) {
     axios.get(tocUrl).then(function(result) {
       //console.log(result.data);
       let parseString = xmlParser.parseString;
-      parseString(result.data, function (err, resultJson) {
+      parseString(result.data, { explicitChildren: true, preserveChildrenOrder: true }, function (err, resultJson) {
         let content = [];
         if (resultJson.root.document && Array.isArray(resultJson.root.document)) {
           for (let document of resultJson.root.document) {
@@ -88,28 +175,28 @@ export default function(obj, args, context, info) {
         axios.all(pageUrls).then(function(result) {
           // console.log(result[0]);
           result.map(val => {
-            parseString(val.data, function (err, resultJson) {
+            parseString(val.data, { explicitChildren: true, preserveChildrenOrder: true }, function (err, resultJson) {
 
               let actDoc = resultJson['act:act'];
-              let contentDoc = actDoc['act:content'][0];
+              let contentDoc = retrieveValue(actDoc, 'act:content');
               if (act.id === undefined) {
-                act.id = actDoc['$']['id'];
-                act.title = actDoc['act:title'][0];
-                act.chapter = actDoc['act:chapter'][0];
-                act.yearEnacted = actDoc['act:yearenacted'][0];
-                act.assentedTo = actDoc['act:assentedto'][0];
+                act.id = retrieveId(actDoc);
+                act.title = retrieveValue(actDoc, 'act:title');
+                act.chapter = retrieveValue(actDoc, 'act:chapter');
+                act.yearEnacted = retrieveValue(actDoc, 'act:yearenacted');
+                act.assentedTo = retrieveValue(actDoc, 'act:assentedto');
 
                 console.log(`id: ${act.id}, title: ${act.title}, chapter: ${act.chapter}, yearEnacted: ${act.yearEnacted}, assentedTo: ${act.assentedTo}`);
               }
               if (contentDoc['bcl:part']) {
-                let partDoc = contentDoc['bcl:part'][0];
+                let partDoc = retrieveValue(contentDoc, 'bcl:part');
                 let sectionsDoc = partDoc['bcl:section'];
                 let divisionsDoc = partDoc['bcl:division'];
                 let part = {
-                  id: partDoc['$']['id'],
+                  id: retrieveId(partDoc),
                   postfix: contentDoc['$']['postfix'],
-                  num: partDoc['bcl:num'][0],
-                  text: partDoc['bcl:text'][0],
+                  num: retrieveValue(partDoc, 'bcl:num'),
+                  text: retrieveValue(partDoc, 'bcl:text'),
                 };
                 if (divisionsDoc) {
                   part.content = [];
@@ -145,7 +232,7 @@ export default function(obj, args, context, info) {
               }
               if (contentDoc['bcl:schedule']) {
                 let scheduleDoc = contentDoc['bcl:schedule'];
-                console.log(scheduleDoc)
+                //console.log(scheduleDoc)
                 // let partDoc = contentDoc['bcl:part'][0];
                 // let sectionsDoc = partDoc['bcl:section'];
                 // let part = {
@@ -157,7 +244,7 @@ export default function(obj, args, context, info) {
               }
             });
           });
-          console.log(act)
+          //console.log(act)
           resolve(act);
         });
         // console.log(resultJson);

@@ -1,4 +1,4 @@
-import SubSection from './subSection';
+import SectionContent from './sectionContent';
 
 const Section = `
   type Section {
@@ -6,8 +6,8 @@ const Section = `
     num: String!
     marginalNote: String!
     text: String
-    subSections: [Subsection]
+    content: [SectionContent]
   }
 `;
 
-export default () => [Section, SubSection];
+export default () => [Section, SectionContent];

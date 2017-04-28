@@ -1,12 +1,14 @@
-import Paragraph from './paragraph';
+import SubSectionContent from './subSectionContent';
+import ContentType from './contentType';
 
 const SubSection = `
-  type Subsection {
+  type SubSection {
     id: String!
+    type: ContentType!
     num: String!
     text: String!
-    content: [Paragraph]
+    content: [SubSectionContent]
   }
 `;
 
-export default () => [SubSection, Paragraph];
+export default () => [SubSection, SubSectionContent, ContentType];
