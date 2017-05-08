@@ -6,6 +6,7 @@
   "scripts": {
     "lint": "eslint ./src",
     "start": "cross-env NODE_ENV=development babel-node ./server.js",
+    "debug": "cross-env %NODE_DEBUG_OPTION% NODE_ENV=development babel-node ./server.js",
     "build": "rimraf dist && webpack --config ./webpack.config.prod.js",
     "serve": "cross-env NODE_ENV=production babel-node ./server.js"
   },

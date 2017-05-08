@@ -1,4 +1,77 @@
-const QUERY = `
+const LAWS_DOC_QUERY = `
+ {lawsDocumentList(path: ["statreg", "1527898742", "98043", "1138648009"]) {
+  id,
+  title,
+  chapter,
+  yearEnacted,
+  assentedTo,
+  parts {
+    id,
+    postfix,
+    num,
+    text,
+    content {
+      ... on Division {
+        ...divisionFields
+      }
+      ... on Section {
+        id,
+        marginalNote,
+        num
+        content {
+          ... on SubSection {
+            ...subSectionFields
+          }
+          ... on Paragraph {
+            ...paragraphFields
+          }
+        }
+      }
+    }
+  }
+}}
+
+fragment divisionFields on Division {
+  id,
+  text,
+  num,
+  sections {
+    id,
+    marginalNote,
+    num
+  }
+}
+
+fragment subSectionFields on SubSection {
+  id,
+  type,
+  text,
+  num,
+  content {
+    ... on Paragraph {
+      ...paragraphFields
+    }
+    ... on Definition {
+      ...definitionFields
+    }
+  }
+}
+
+fragment paragraphFields on Paragraph {
+  id,
+  type,
+  text,
+  num
+}
+
+fragment definitionFields on Definition {
+  id,
+  type,
+  term,
+  text
+}`;
+
+const LAWS_DOC_QUERY = `
  {lawsDocument(path: ["statreg", "1527898742", "98043", "1138648009"]) {
   title,
   chapter,

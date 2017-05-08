@@ -1,49 +1,59 @@
 import axios from 'axios';
-import xmlParser from 'xml2js';
-
+import xamel from 'xamel';
 import { BCLAWS_URL, BCLAWS_DOC_URL } from '../config';
 
-function retrieveId(docNode) {
-  return (docNode['$']) ? docNode['$']['id'] : null;
-}
-
-function retrieveValue(docNode, field) {
-  return (docNode[field]) ? docNode[field][0] : null;
+function fetchChildNode(xml, nodeName, allowMultipleValues = false) {
+  let childNodes = xml.$(nodeName);
+  if (childNodes.length === 0) {
+    console.error(`${nodeName} node not found in returned XML document.`);
+  } else if (childNodes.length === 1) {
+    return childNodes.eq(0);
+  } else {
+    if (allowMultipleValues) {
+      return childNodes;
+    } else {
+      console.error(`Too many ${nodeName} nodes not found in returned XML document.`);
+    }
+  }
 }
 
 function parseDivision(divisionDoc) {
   let division = {
-    id: retrieveId(divisionDoc),
-    text: retrieveValue(divisionDoc, 'bcl:text'),
-    num: retrieveValue(divisionDoc, 'bcl:num'),
+    id: divisionDoc.attr('id'),
+    text: divisionDoc.$('bcl:text/text()'),
+    num: divisionDoc.$('bcl:num/text()'),
   };
-  let sectionsDoc = divisionDoc['bcl:section'];
-  if (sectionsDoc) {
+  let sectionDocs = divisionDoc.$('bcl:section');
+  if (sectionDocs && sectionDocs.length > 0) {
     division.sections = [];
-    for (let sectionDoc of sectionsDoc) {
+    for (let x=0; x < sectionDocs.length; x++) {
+      let sectionDoc = sectionDocs.eq(x);
       division.sections.push(parseSection(sectionDoc));
     }
   }
   return division;
 }
+
 function parseSection(sectionDoc) {
   let section = {
-    id: retrieveId(sectionDoc),
-    marginalNote: retrieveValue(sectionDoc, 'bcl:marginalnote'),
-    num: retrieveValue(sectionDoc, 'bcl:num'),
-    text: retrieveValue(sectionDoc, 'bcl:text'),
+    id: sectionDoc.attr('id'),
+    marginalNote: sectionDoc.$('bcl:marginalnote/text()'),
+    num: sectionDoc.$('bcl:num/text()'),
+    text: sectionDoc.$('bcl:text/text()'),
     content: []
   };
-  let subsectionsDoc = sectionDoc['bcl:subsection'];
+  let subsectionsDoc = sectionDoc.$('bcl:subsection');
   if (subsectionsDoc) {
-    for (let subsectionDoc of subsectionsDoc) {
+    for (let x=0; x < subsectionsDoc.length; x++) {
+      let subsectionDoc = subsectionsDoc.eq(x);
       section.content.push(parseSubSection(subsectionDoc));
     }
     // console.log(sectionsDoc[0])
   }
-  let paragraphsDoc = sectionDoc['bcl:paragraph'];
+  let paragraphsDoc = sectionDoc.$('bcl:paragraph');
   if (paragraphsDoc) {
-    for (let paragraphDoc of paragraphsDoc) {
+    for (let x=0; x < paragraphsDoc.length; x++) {
+      let paragraphDoc = paragraphsDoc.eq(x);
       section.content.push(parseParagraph(paragraphDoc));
     }
     // console.log(sectionsDoc[0])
@@ -54,22 +64,24 @@ function parseSection(sectionDoc) {
 
 function parseSubSection(subSectionDoc) {
   let subSection = {
-    id: retrieveId(subSectionDoc),
+    id: subSectionDoc.attr('id'),
     type: "SubSection",
-    text: retrieveValue(subSectionDoc, 'bcl:text'),
-    num: retrieveValue(subSectionDoc, 'bcl:num'),
+    text: subSectionDoc.$('bcl:text/text()'),
+    num: subSectionDoc.$('bcl:num/text()'),
     content: []
   };
-  let paragraphsDoc = subSectionDoc['bcl:paragraph'];
+  let paragraphsDoc = subSectionDoc.$('bcl:paragraph');
   if (paragraphsDoc) {
-    for (let paragraphDoc of paragraphsDoc) {
+    for (let x=0; x < paragraphsDoc.length; x++) {
+      let paragraphDoc = paragraphsDoc.eq(x);
       subSection.content.push(parseParagraph(paragraphDoc));
     }
     // console.log(sectionsDoc[0])
   }
-  let definitionsDoc = subSectionDoc['bcl:definition'];
+  let definitionsDoc = subSectionDoc.$('bcl:definition');
   if (definitionsDoc) {
-    for (let definitionDoc of definitionsDoc) {
+    for (let x=0; x < definitionsDoc.length; x++) {
+      let definitionDoc = definitionsDoc.eq(x);
       subSection.content.push(parseDefinition(definitionDoc));
     }
     // console.log(sectionsDoc[0])
@@ -79,52 +91,53 @@ function parseSubSection(subSectionDoc) {
 
 function parseParagraph(paragraphDoc) {
   let paragraph = {
-    id: retrieveId(paragraphDoc),
+    id: paragraphDoc.attr('id'),
     type: "Paragraph",
-    text: retrieveValue(paragraphDoc, 'bcl:text'),
-    num: retrieveValue(paragraphDoc, 'bcl:num'),
+    text: paragraphDoc.$('bcl:text/text()'),
+    num: paragraphDoc.$('bcl:num/text()'),
   };
   return paragraph;
 }
 
 function parseDefinition(definitionDoc) {
   let definition = {
-    id: retrieveId(definitionDoc),
+    id: definitionDoc.attr('id'),
     type: "Definition",
-    text: "Placeholder",
+    term: definitionDoc.$('bcl:text/in:term/text()'),
+    text: definitionDoc.$('bcl:text/text()'),
     links: []
   };
-  let textDoc = retrieveValue(definitionDoc, 'bcl:text');
-  if (textDoc) {
-    console.log("TEXT: " + JSON.stringify(textDoc));
-    definition.term = retrieveValue(textDoc, 'in:term');
-    let textData = textDoc['$$'];
-    let linkData = textDoc['bcl:link'];
-    if (textData) {
-      if (textData.length === 1) {
-        definition.text = textData[0];
-      } else {
-        let text = [textData[0][0]];
-        if (linkData) {
-          for (let x=0; x<linkData.length; x++) {
-            let link = {
-              href: linkData[x]['$']['xlink:href'],
-              resourceType: linkData[x]['$']['resource'],
-              text: linkData[x]['in:doc'][0],
-            };
-            definition.links.push(link);
-            text.push('${' + link.href + '}')
-            text.push(textData[x])
-          }
-        }
-        definition.text = text.join('');
-      }
-    }
-  }
-  let paragraphsDoc = definitionDoc['bcl:paragraph'];
-  if (paragraphsDoc) {
-    // TODO: Add text content to definition text
-  }
+  // let textDoc = fetchChildNode(definitionDoc, 'bcl:text');
+  // if (textDoc) {
+  //   //console.log("TEXT: " + JSON.stringify(textDoc));
+  //   definition.term = textDoc.$('in:term/text()');
+  //   let textData = textDoc['$$'];
+  //   let linkData = textDoc.$('bcl:link');
+  //   if (textData) {
+  //     if (textData.length === 1) {
+  //       definition.text = textData[0];
+  //     } else {
+  //       let text = [textData[0][0]];
+  //       if (linkData) {
+  //         for (let x=0; x<linkData.length; x++) {
+  //           let link = {
+  //             href: linkData[x]['$']['xlink:href'],
+  //             resourceType: linkData[x]['$']['resource'],
+  //             text: linkData[x]['in:doc'][0],
+  //           };
+  //           definition.links.push(link);
+  //           text.push('${' + link.href + '}')
+  //           text.push(textData[x])
+  //         }
+  //       }
+  //       definition.text = text.join('');
+  //     }
+  //   }
+  // }
+  // let paragraphsDoc = definitionDoc['bcl:paragraph'];
+  // if (paragraphsDoc) {
+  //   // TODO: Add text content to definition text
+  // }
 
   return definition;
 }
@@ -143,24 +156,28 @@ export default function(obj, args, context, info) {
   return new Promise((resolve, reject) => {
     axios.get(tocUrl).then(function(result) {
       //console.log(result.data);
-      let parseString = xmlParser.parseString;
-      parseString(result.data, { explicitChildren: true, preserveChildrenOrder: true }, function (err, resultJson) {
+      xamel.parse(result.data, function(err, xml) {
+        // console.log(JSON.stringify(xml));
+        let documents = xml.$('root/document');
         let content = [];
-        if (resultJson.root.document && Array.isArray(resultJson.root.document)) {
-          for (let document of resultJson.root.document) {
+        if (documents) {
+          for (let x=0; x < documents.length; x++) {
+            let document = documents.eq(x);
+            // console.log(JSON.stringify(document));
             content.push({
-              title: document.CIVIX_DOCUMENT_TITLE,
-              location: document.CIVIX_DOCUMENT_LOC,
-              id: document.CIVIX_DOCUMENT_ID,
-              type: document.CIVIX_DOCUMENT_TYPE,
-              parent: document.CIVIX_DOCUMENT_PARENT,
-              ancestors: document.CIVIX_DOCUMENT_ANCESTORS.toString().split(','),
-              isVisible: document.CIVIX_DOCUMENT_VISIBLE,
-              order: parseInt(document.CIVIX_DOCUMENT_ORDER)
+              title: document.$('CIVIX_DOCUMENT_TITLE/text()'),
+              location: document.$('CIVIX_DOCUMENT_LOC/text()'),
+              id: document.$('CIVIX_DOCUMENT_ID/text()'),
+              type: document.$('CIVIX_DOCUMENT_TYPE/text()'),
+              parent: document.$('CIVIX_DOCUMENT_PARENT/text()'),
+              ancestors: document.$('CIVIX_DOCUMENT_ANCESTORS/text()').toString().split(' '),
+              isVisible: document.$('CIVIX_DOCUMENT_VISIBLE/text()'),
+              order: parseInt(document.$('CIVIX_DOCUMENT_ORDER/text()'))
             })
           }
         }
         content.sort((a, b) => a.order - b.order);
+        console.log(content);
         let contentType = path[0];
         let pageUrls = [];
         for (let page of content) {
@@ -175,40 +192,80 @@ export default function(obj, args, context, info) {
         axios.all(pageUrls).then(function(result) {
           // console.log(result[0]);
           result.map(val => {
-            parseString(val.data, { explicitChildren: true, preserveChildrenOrder: true }, function (err, resultJson) {
 
-              let actDoc = resultJson['act:act'];
-              let contentDoc = retrieveValue(actDoc, 'act:content');
+            xamel.parse(val.data, function(err, xml) {
+            //   console.log(JSON.stringify(xml));
+            // });
+            //
+            // xmlParser.parseString(val.data, { explicitChildren: true, preserveChildrenOrder: true }, function (err, resultJson) {
+
+              let actDoc = fetchChildNode(xml, 'act:act');
+              //console.log(JSON.stringify(actDoc));
               if (act.id === undefined) {
-                act.id = retrieveId(actDoc);
-                act.title = retrieveValue(actDoc, 'act:title');
-                act.chapter = retrieveValue(actDoc, 'act:chapter');
-                act.yearEnacted = retrieveValue(actDoc, 'act:yearenacted');
-                act.assentedTo = retrieveValue(actDoc, 'act:assentedto');
+                act.id = actDoc.attr('id');
+                act.title = actDoc.$('act:title/text()');
+                act.chapter = actDoc.$('act:chapter/text()');
+                act.yearEnacted = actDoc.$('act:yearenacted/text()');
+                act.assentedTo = actDoc.$('act:assentedto/text()');
 
-                console.log(`id: ${act.id}, title: ${act.title}, chapter: ${act.chapter}, yearEnacted: ${act.yearEnacted}, assentedTo: ${act.assentedTo}`);
+                //console.log(`id: ${act.id}, title: ${act.title}, chapter: ${act.chapter}, yearEnacted: ${act.yearEnacted}, assentedTo: ${act.assentedTo}`);
               }
-              if (contentDoc['bcl:part']) {
-                let partDoc = retrieveValue(contentDoc, 'bcl:part');
-                let sectionsDoc = partDoc['bcl:section'];
-                let divisionsDoc = partDoc['bcl:division'];
+              // console.log("CON: " + JSON.stringify(contentDoc));
+              let contentDoc = fetchChildNode(actDoc, 'act:content');
+              let partDoc = fetchChildNode(contentDoc, 'bcl:part');
+              if (partDoc) {
                 let part = {
-                  id: retrieveId(partDoc),
-                  postfix: contentDoc['$']['postfix'],
-                  num: retrieveValue(partDoc, 'bcl:num'),
-                  text: retrieveValue(partDoc, 'bcl:text'),
+                  id: partDoc.attr('id'),
+                  postfix: contentDoc.attr('postfix'),
+                  num: partDoc.$('bcl:num/text()'),
+                  text: partDoc.$('bcl:text/text()'),
                 };
-                if (divisionsDoc) {
-                  part.content = [];
-                  for (let divisionDoc of divisionsDoc) {
-                    part.content.push(parseDivision(divisionDoc));
-                  }
+
+                if (part.id === 'd2e25') {
+                  console.log(`DEFINITION PART: ${JSON.stringify(partDoc)}`);
                 }
-                if (sectionsDoc) {
+                let divisionDocs = fetchChildNode(partDoc, 'bcl:division', true);
+                if (divisionDocs && divisionDocs.length > 0) {
                   part.content = [];
-                  for (let sectionDoc of sectionsDoc) {
-                    part.content.push(parseSection(sectionDoc));
+                  for (let x=0; x < divisionDocs.length; x++) {
+                    let divisionDoc = divisionDocs.eq(x);
+                    let result = parseDivision(divisionDoc);
+                    console.log("DIVISION: " + JSON.stringify(result));
+                    part.content.push(result);
+                    // part.content.push(parseDivision(divisionDoc));
                   }
+                } else {
+                  console.log(`No divisions found: ${JSON.stringify(divisionDocs)}`);
+                }
+
+                let sectionDocs = partDoc.$('bcl:section');
+                if (sectionDocs) {
+                  part.content = [];
+                  if (sectionDocs.name === 'bcl:section') {
+                    let result = parseSection(sectionDocs);
+                    part.content.push(result);
+                  } else {
+                    console.log(`MULTIPLE SECTIONS: ${JSON.stringify(sectionDocs)}`);
+                    for (let x=0; x < sectionDocs.length; x++) {
+                      let sectionDoc = sectionDocs.eq(x);
+                      //Hack to filter out non-section nodes returned from the API as workaround for XAMEL bug
+                      if (part.id === 'd2e25') {
+                        console.log(`DEFINITION SECTION: ${JSON.stringify(sectionDocs)}`);
+                      }
+                      if (sectionDoc.name !== 'bcl:section') continue;
+
+                      let result = parseSection(sectionDoc);
+                      // console.log("SECTION: " + JSON.stringify(result));
+                      // if (result.id === null) {
+                      //   console.log("ERROR SECTION: " + JSON.stringify(sectionDoc));
+                      // }
+                      part.content.push(result);
+                      // part.content.push(parseSection(sectionDoc));
+                    }
+                  }
+                  // if (part.id === 'd2e25') {
+                  //   console.log(`DEFINITION SECTIONS: ${JSON.stringify(sectionDocs)}`);
+                  // }
                 }
                 /*
                  <act:content postfix="Part 1" id="98043_01">
@@ -230,18 +287,18 @@ export default function(obj, args, context, info) {
                  */
                 act.parts.push(part);
               }
-              if (contentDoc['bcl:schedule']) {
-                let scheduleDoc = contentDoc['bcl:schedule'];
-                //console.log(scheduleDoc)
-                // let partDoc = contentDoc['bcl:part'][0];
-                // let sectionsDoc = partDoc['bcl:section'];
-                // let part = {
-                //   id: partDoc['$']['id'],
-                //   postfix: contentDoc['$']['postfix'],
-                //   num: partDoc['bcl:num'],
-                //   text: partDoc['bcl:text'],
-                // };
-              }
+              // if (contentDoc['bcl:schedule']) {
+              //   let scheduleDoc = contentDoc['bcl:schedule'];
+              //   //console.log(scheduleDoc)
+              //   // let partDoc = contentDoc['bcl:part'][0];
+              //   // let sectionsDoc = partDoc['bcl:section'];
+              //   // let part = {
+              //   //   id: partDoc['$']['id'],
+              //   //   postfix: contentDoc['$']['postfix'],
+              //   //   num: partDoc['bcl:num'],
+              //   //   text: partDoc['bcl:text'],
+              //   // };
+              // }
             });
           });
           //console.log(act)

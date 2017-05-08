@@ -2,18 +2,30 @@ import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import { graphql, compose } from 'react-apollo';
 import gql from 'graphql-tag';
-import BCLawsDocumentList from './lawDocumentList';
-import BCLawsDocument from './lawDocument';
 
-class BCLaws extends Component {
+class BCLawsDocumentList extends Component {
+  constructor() {
+    super();
+    this.state = {
+    };
+  }
+
+  setLetter(letter) {
+    this.setState({letter});
+  }
+
   render() {
-    // const { data: {lawsDocument = []} } = this.props;
+    const { data: {lawsDocumentList = []} } = this.props;
 
+    let lawSelector = undefined;//(this.state.letter) ? (<BCLawsDocumentList path={["statreg", this.state.letter]} />) : undefined;
     return (
       <div>
-        <h1 className='home'>BC Laws Library</h1>
-        <BCLawsDocumentList path={["statreg"]} />
-        <BCLawsDocument path={["statreg", "1527898742", "98043", "1138648009"]} />
+        <select name="lawsByLetter" onChange={(event) => this.setLetter(event.target.value)}>
+          {
+            lawsDocumentList && lawsDocumentList.map(({title, id}) => (<option key={id} value={id}>{title}</option>))
+          }
+        </select>
+        {lawSelector}
       </div>
     );
   }
@@ -46,6 +58,6 @@ const query = gql`
 `;
 
 export default compose(
-    // graphql(query),
+    graphql(query),
     connect(mapStateToProps, mapDispatchToProps)
-)(BCLaws);
+)(BCLawsDocumentList);

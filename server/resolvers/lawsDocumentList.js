@@ -1,64 +1,49 @@
 import axios from 'axios';
-import xmlParser from 'xml2js';
+import xamel from 'xamel';
+import {BCLAWS_URL} from '../config';
 
-import { BCLAWS_URL } from '../config';
-
-export default function(obj, args, context, info) {
+export default function (obj, args, context, info) {
   const {path} = args;
   let url = BCLAWS_URL;
   if (path && Array.isArray(path)) {
     for (let pathItem of path) {
-      url += pathItem + "/";
+      url += "/" + pathItem;
     }
   } else if (path) {
     console.error(`Given path parameter is not an array: ${path}`);
   }
+  // console.log(url);
   return new Promise((resolve, reject) => {
-    axios.get(url).then(function(result) {
-      //console.log(result.data);
-      let parseString = xmlParser.parseString;
-      parseString(result.data, function (err, resultJson) {
+    axios.get(url).then(function (result) {
+      // console.log(result.data);
+      xamel.parse(result.data, function (err, xml) {
+        console.log(JSON.stringify(xml));
+        let documents = xml.$('root/dir');
         let content = [];
-        if (resultJson.root.index && Array.isArray(resultJson.root.index)) {
-          for (let document of resultJson.root.index) {
+        if (documents) {
+          for (let x = 0; x < documents.length; x++) {
+            let document = documents.eq(x);
+            // console.log(JSON.stringify(document));
             content.push({
-              title: document.CIVIX_DOCUMENT_TITLE,
-              id: document.CIVIX_DOCUMENT_ID
+              title: document.$('CIVIX_DOCUMENT_TITLE/text()'),
+              location: document.$('CIVIX_DOCUMENT_LOC/text()'),
+              id: document.$('CIVIX_DOCUMENT_ID/text()'),
+              type: document.$('CIVIX_DOCUMENT_TYPE/text()'),
+              parent: document.$('CIVIX_DOCUMENT_PARENT/text()'),
+              ancestors: document.$('CIVIX_DOCUMENT_ANCESTORS/text()').toString().split(' '),
+              isVisible: document.$('CIVIX_DOCUMENT_VISIBLE/text()'),
+              order: parseInt(document.$('CIVIX_DOCUMENT_ORDER/text()'))
             })
           }
-        } else if (resultJson.root.dir && Array.isArray(resultJson.root.dir)) {
-          for (let document of resultJson.root.dir) {
-            content.push({
-              title: document.CIVIX_DOCUMENT_TITLE,
-              id: document.CIVIX_DOCUMENT_ID,
-              type: document.CIVIX_DOCUMENT_TYPE,
-              parent: document.CIVIX_DOCUMENT_PARENT,
-              ancestors: document.CIVIX_DOCUMENT_ANCESTORS.toString().split(','),
-              isVisible: document.CIVIX_DOCUMENT_VISIBLE,
-              order: parseInt(document.CIVIX_DOCUMENT_ORDER)
-            })
-          }
-        } else if (resultJson.root.document && Array.isArray(resultJson.root.document)) {
-          for (let document of resultJson.root.document) {
-            content.push({
-              title: document.CIVIX_DOCUMENT_TITLE,
-              location: document.CIVIX_DOCUMENT_LOC,
-              id: document.CIVIX_DOCUMENT_ID,
-              type: document.CIVIX_DOCUMENT_TYPE,
-              parent: document.CIVIX_DOCUMENT_PARENT,
-              ancestors: document.CIVIX_DOCUMENT_ANCESTORS.toString().split(','),
-              isVisible: document.CIVIX_DOCUMENT_VISIBLE,
-              order: parseInt(document.CIVIX_DOCUMENT_ORDER)
-            })
-          }
+        } else {
+          reject("No Documents found at URL: " + url);
         }
         content.sort((a, b) => a.order - b.order);
-        console.log(resultJson);
-        console.log(content);
         resolve(content);
       });
-    }).catch(function(error) {
-      console.log(error)
+    }).catch(function (error) {
+        console.log(error);
+        reject(error);
+      });
     });
-  });
 };
